@@ -250,8 +250,6 @@ print(ggplot(datamonthyr) +
 for(theyr in 2005:2010){
 tempplotter(forcing,theyr)
 }
-
-
 ```
 
 
@@ -278,6 +276,11 @@ ggplot(doyavg, aes(x=doy, y=doy_avg, color=site)) +
 
 Bonus #2: Use a function and for loop to create yearly plots of precipitation by day of year. Color each site. 
 ```{r}
+
+
+
+
+
 
 ```
 
