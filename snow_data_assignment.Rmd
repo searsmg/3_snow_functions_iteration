@@ -1,7 +1,7 @@
 ---
 title: "Snow Data Assignment: Web Scraping, Functions, and Iteration"
-author: "Nathan Mueller"
-date: "2-7-2022"
+author: "Megan Sears"
+date: "2-9-2022"
 output: html_document
 ---
 
@@ -142,7 +142,16 @@ ggplot(snow_yearly,aes(x=Year,y=mean_height,color=site)) +
 
 ```{r}
 
+site_url <- 'https://snowstudies.org/archived-data/'
 
+#Read the web url
+webpage <- read_html(site_url)
+
+#Extract only weblinks and then the URLs!
+links <- webpage %>%
+  html_nodes('a') %>%
+  .[grepl('_Forcing',.)] %>%
+  html_attr('href')
 
 ```
 
@@ -150,6 +159,22 @@ ggplot(snow_yearly,aes(x=Year,y=mean_height,color=site)) +
 2. Download the meteorological data. Use the `download_file` and `str_split_fixed` commands to download the data and save it in your data folder. You can use a for loop or a map function. 
 
 ```{r}
+
+#Grab only the name of the file by splitting out on forward slashes
+splits <- str_split_fixed(links,'/',8)
+
+#Keep only the 8th column
+dataset <- splits[,8] 
+
+#generate a file list for where the data goes
+file_names <- paste0('data/',dataset)
+
+for(i in 1:length(links)){
+  download.file(links[i], destfile=file_names[i])
+}
+
+downloaded <- file.exists(file_names)
+evaluate <- !all(downloaded)
 
 ```
 
@@ -165,8 +190,18 @@ headers <- pdf_text('https://snowstudies.org/wp-content/uploads/2022/02/Serially
   trimws(.) %>%
   str_split_fixed(.,'\\.',2) %>%
   .[,2] %>%
-  .[1:26] %>%
-  str_trim(side = "left")
+  .[1:20] %>%
+  str_trim(side = "left") 
+
+headers_add <- c(headers, "site")
+
+
+met_reader <- function(file){
+  name = str_split_fixed(file,'_',4)[,2]
+  df <- read.delim(file, header = FALSE, sep ="", skip=4) %>%
+    mutate(site = name)
+return(df)
+}
 
 ```
 
@@ -174,12 +209,23 @@ headers <- pdf_text('https://snowstudies.org/wp-content/uploads/2022/02/Serially
 
 ```{r}
 
+forcing <- map_dfr(file_names, met_reader)
+forcing <- setNames(forcing, headers_add)
+
+
 ```
 
 
 5. Make a line plot of mean temp by year by site (using the `air temp [K]` variable). Is there anything suspicious in the plot? Adjust your filtering if needed.
 
 ```{r}
+annual <- forcing %>%
+  group_by(year, site) %>%
+  summarize(avgtemp = mean(`air temp [K]`))
+
+ggplot(annual) + 
+  geom_line(aes(x=year,y=avgtemp,color=site)) +
+  theme_bw()
 
 ```
 
@@ -188,10 +234,50 @@ headers <- pdf_text('https://snowstudies.org/wp-content/uploads/2022/02/Serially
 Hint: https://ggplot2.tidyverse.org/reference/print.ggplot.html
 
 ```{r}
+tempplotter <- function(df, theyr){
+
+datamonthyr <- df %>%
+  filter(year==theyr) %>%
+  group_by(month,site) %>%
+  summarize(avgtemp = mean(`air temp [K]`))
+
+print(ggplot(datamonthyr) + 
+  geom_line(aes(x=month,y=avgtemp,color=site)) +
+  theme_bw() +
+  ggtitle(theyr))
+}
+
+for(theyr in 2005:2010){
+tempplotter(forcing,theyr)
+}
+
 
 ```
 
 
 Bonus: Make a plot of average daily precipitation by day of year (averaged across all available years). Color each site. 
 
+```{r}
+#daily sums
+forcing_sum <- forcing %>%
+  mutate(date= make_date(year, month, day)) %>%
+  mutate(doy = yday(date)) %>%
+  rename(precip = `precip [kg m-2 s-1]`) %>%
+  group_by(site, year, doy) %>%
+  summarize(dailyp = sum(precip))
+
+doyavg <- forcing_sum %>%
+  group_by(site, doy) %>%
+  summarize(doy_avg = mean(dailyp))
+
+ggplot(doyavg, aes(x=doy, y=doy_avg, color=site)) +
+  geom_point()
+
+```
+
+
 Bonus #2: Use a function and for loop to create yearly plots of precipitation by day of year. Color each site. 
+```{r}
+
+```
+
